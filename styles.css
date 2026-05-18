@@ -85,12 +85,18 @@ a{ color:inherit; text-decoration:none; }
 .brand-subtitle{ color:rgba(255,255,255,.9); font-size:12.5px; line-height:1.3; }
 
 @media (max-width: 720px){
-  .header-inner{ padding:10px 12px; }
+  .header-inner{ padding:10px 12px; justify-content:center; }
   .header-right{ display:none; }
   #desktopTitle, #desktopSubtitle{ display:none !important; }
 
   .brand{ width:100%; justify-content:center; }
   .brand-logo{ width:60px; height:44px; }
+
+  /* centraliza a logo no mobile, mesmo com o burger à esquerda */
+  .brand{ position:absolute; left:0; right:0; }
+  .header-inner{ position:relative; }
+  .burger{ position:absolute; left:12px; }
+
 
   .side-nav{ display:flex !important; flex-direction:column !important; align-items:flex-end !important; gap:10px; }
   .side-nav > a{ display:block !important; width:100% !important; text-align:right !important; }
