@@ -37,13 +37,12 @@
   </header>
 
 
-  <!-- Menu hamburguer simples (sem vários painéis) -->
   <aside class="side-panel" id="sidePanel" aria-hidden="true">
     <div class="side-panel-inner">
       <div class="side-title">J. Macêdo • Refri</div>
 
       <nav class="side-nav">
-        <a class="side-link" href="#upcoming" data-close-menu>Calendário</a>
+        <a class="side-link" href="#upcomingSection" data-close-menu>Calendário</a>
         <a class="side-link" href="#history" data-close-menu>Histórico</a>
       </nav>
 
@@ -54,24 +53,25 @@
         <div class="side-help">Lista configurada no código (script.js). Para alterar, edite a variável DEFAULT_PEOPLE.</div>
       </div>
 
-      <div class="inline" style="margin-top:12px;">
+      <div class="inline action-row">
         <button class="btn" id="btnRegenerate">Recalcular mês</button>
         <button class="btn danger" id="btnReset">Reset</button>
       </div>
-
 
       <div class="side-note">Salvo no navegador (localStorage).</div>
     </div>
   </aside>
 
-
   <main class="container">
-<div class="layout">
-      <section class="card">
+    <div class="layout">
+      <section class="card card-upcoming" id="upcomingSection">
         <div class="section-title">
-          <h2>Próximos sábados</h2>
-          <div class="hint">Mostra próximos 8 sábados com responsáveis e litros.</div>
-    </div>
+          <div>
+            <h2>Próximos sábados</h2>
+            <div class="hint">As próximas 8 datas com três pessoas responsáveis para cada sábado.</div>
+          </div>
+          <div class="card-note">Atualiza automaticamente toda segunda-feira.</div>
+        </div>
 
         <div class="calendar" id="upcoming"></div>
 
@@ -80,15 +80,17 @@
         </div>
       </section>
 
-      <section class="card">
-        <div class="section-title" id="history">
-          <h2>Histórico</h2>
-          <div class="hint">Últimos 6 sábados atribuídos.</div>
+      <section class="card card-history" id="history">
+        <div class="section-title">
+          <div>
+            <h2>Histórico</h2>
+            <div class="hint">Últimos 6 sábados atribuídos.</div>
+          </div>
         </div>
 
         <div class="people-list" id="peopleList" aria-label="Lista de pessoas"></div>
 
-        <div class="log" id="historyList" style="margin-top:14px;"></div>
+        <div class="log history-list" id="historyList"></div>
       </section>
     </div>
   </main>

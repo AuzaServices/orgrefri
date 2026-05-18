@@ -117,19 +117,22 @@
 
   function buildAssignmentsForMonth(monthKey, people) {
     const saturdays = getAllSaturdaysInMonth(monthKey);
-    const capacity = monthCapacity(people.length);
-    const needed = Math.min(saturdays.length, capacity);
-
+    const needed = saturdays.length * 3;
     const seed = hashString('refri|' + monthKey);
     const shuffled = seededShuffle(people, seed);
 
+    if (people.length < needed) {
+      console.warn(`Mês ${monthKey} precisa de ${needed} nomes. Há apenas ${people.length}.`);
+    }
+
+    const selected = shuffled.slice(0, needed);
     const assignments = [];
-    let idx = 0;
-    for (let i = 0; i < needed; i++) {
+
+    for (let i = 0; i < saturdays.length; i++) {
       const sat = saturdays[i];
-      const p1 = shuffled[idx++];
-      const p2 = shuffled[idx++];
-      const p3 = shuffled[idx++];
+      const p1 = selected[i * 3] || '—';
+      const p2 = selected[i * 3 + 1] || '—';
+      const p3 = selected[i * 3 + 2] || '—';
 
       assignments.push({
         dateYMD: ymd(sat),
@@ -159,9 +162,11 @@
         people: DEFAULT_PEOPLE.slice(),
         assignmentsByDate: {},
         imagesByTypeAndDate: {},
-        updatedAt: null
+        updatedAt: null,
+        lastMondayRefresh: null
       };
     }
+
     try {
       return JSON.parse(raw);
     } catch {
@@ -169,7 +174,8 @@
         people: DEFAULT_PEOPLE.slice(),
         assignmentsByDate: {},
         imagesByTypeAndDate: {},
-        updatedAt: null
+        updatedAt: null,
+        lastMondayRefresh: null
       };
     }
   }
@@ -178,39 +184,71 @@
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
 
-  let state = loadState();
+  function normalizeState(raw) {
+    return {
+      people: Array.isArray(raw.people) ? raw.people : DEFAULT_PEOPLE.slice(),
+      assignmentsByDate: raw.assignmentsByDate && typeof raw.assignmentsByDate === 'object' ? raw.assignmentsByDate : {},
+      imagesByTypeAndDate: raw.imagesByTypeAndDate && typeof raw.imagesByTypeAndDate === 'object' ? raw.imagesByTypeAndDate : {},
+      updatedAt: raw.updatedAt || null,
+      lastMondayRefresh: raw.lastMondayRefresh || null
+    };
+  }
+
+  let state = normalizeState(loadState());
 
   function computeCurrentMonthKey() {
     const p = toTimeZoneDateParts(new Date());
     return `${p.y}-${String(p.m).padStart(2, '0')}`;
   }
 
-  function ensureMonthlyAssignmentsUpTo(date) {
-    const tzParts = toTimeZoneDateParts(date);
-    const currentMonthKey = `${tzParts.y}-${String(tzParts.m).padStart(2, '0')}`;
-    const nextMonth = new Date(tzParts.y, tzParts.m, 1);
-    const nextMonthKey = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, '0')}`;
+  function computeMonthKeyFromDate(date) {
+    const parts = toTimeZoneDateParts(date);
+    return `${parts.y}-${String(parts.m).padStart(2, '0')}`;
+  }
 
-    for (const mk of [currentMonthKey, nextMonthKey]) {
-      const monthSats = getAllSaturdaysInMonth(mk).map(d => ymd(d));
-      const missing = monthSats.filter(k => !state.assignmentsByDate[k]);
-      if (missing.length > 0) {
-        const built = buildAssignmentsForMonth(mk, state.people);
-        for (const a of built) {
-          if (!state.assignmentsByDate[a.dateYMD]) state.assignmentsByDate[a.dateYMD] = a;
+  function getWeekMonday(date) {
+    const parts = toTimeZoneDateParts(date);
+    const d = new Date(parts.y, parts.m - 1, parts.d);
+    const offset = (d.getDay() + 6) % 7; // shift Sunday=0 to 6, Monday=1 to 0
+    d.setDate(d.getDate() - offset);
+    return d;
+  }
+
+  function ensureMonthlyAssignmentsUpTo(date) {
+    const upcomingSaturdays = nextSaturdayDates(8, date);
+    const requiredMonthKeys = new Set();
+
+    for (const sat of upcomingSaturdays) {
+      const monthKey = `${sat.getFullYear()}-${String(sat.getMonth() + 1).padStart(2, '0')}`;
+      requiredMonthKeys.add(monthKey);
+    }
+
+    const builtMonthKeys = Array.from(requiredMonthKeys).sort();
+    let changed = false;
+    for (const mk of builtMonthKeys) {
+      const built = buildAssignmentsForMonth(mk, state.people);
+      for (const a of built) {
+        if (!state.assignmentsByDate[a.dateYMD]) {
+          changed = true;
         }
+        state.assignmentsByDate[a.dateYMD] = a;
       }
+    }
+
+    if (changed) {
+      state.updatedAt = new Date().toISOString();
+      saveState();
     }
   }
 
-  // Segunda-feira: atualiza preparando atribuições do mês (sem apagar histórico)
   function maybeUpdateOnMonday() {
-    const parts = toTimeZoneDateParts(new Date());
-    const d = new Date(parts.y, parts.m - 1, parts.d);
-    const jsDay = d.getDay(); // Monday=1
-    if (jsDay !== 1) return;
+    const now = new Date();
+    const monday = getWeekMonday(now);
+    const mondayKey = ymd(monday);
+    if (state.lastMondayRefresh === mondayKey) return;
 
-    ensureMonthlyAssignmentsUpTo(new Date());
+    ensureMonthlyAssignmentsUpTo(now);
+    state.lastMondayRefresh = mondayKey;
     state.updatedAt = new Date().toISOString();
     saveState();
   }
@@ -233,6 +271,16 @@
 
     clearTimeout(showToast._t);
     showToast._t = setTimeout(() => toast.classList.remove('show'), 2600);
+  }
+
+  function renderStatusText() {
+    const statusText = document.getElementById('statusText');
+    const now = new Date();
+    const dayName = new Intl.DateTimeFormat('pt-BR', { timeZone: TIMEZONE, weekday: 'long' }).format(now);
+    const updatedLabel = state.updatedAt
+      ? `Última atualização: ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: TIMEZONE }).format(new Date(state.updatedAt))}`
+      : 'Sem atualização ainda';
+    statusText.textContent = `Hoje: ${dayName} • ${updatedLabel}`;
   }
 
   function renderPeople() {
@@ -271,9 +319,9 @@
 
     for (const sat of sats) {
       const a = getAssignmentsForDate(sat);
-
       const assigned = !!a;
-
+      const cocaPeople = assigned && Array.isArray(a.coca) ? a.coca : (assigned && a.coca ? [a.coca] : []);
+      const geraldoPerson = assigned && typeof a.geraldo === 'string' ? a.geraldo : assigned && a.geraldo ? String(a.geraldo) : null;
 
       const el = document.createElement('div');
       el.className = 'sat';
@@ -291,7 +339,7 @@
               <div class="hint">${assigned ? 'Selecionadas' : 'Atribuindo...'}</div>
             </div>
             <div class="people">
-              ${assigned ? a.coca.map(p => `<span class="person">${escapeHtml(p)}</span>`).join('') : '<span class="person">—</span>'}
+              ${assigned && cocaPeople.length > 0 ? cocaPeople.map(p => `<span class="person">${escapeHtml(p)}</span>`).join('') : '<span class="person">—</span>'}
             </div>
           </div>
 
@@ -302,7 +350,7 @@
             </div>
 
             <div class="people">
-              ${assigned ? `<span class="person">${escapeHtml(a.geraldo)}</span>` : '<span class="person">—</span>'}
+              ${assigned && geraldoPerson ? `<span class="person">${escapeHtml(geraldoPerson)}</span>` : '<span class="person">—</span>'}
             </div>
 
 
@@ -321,8 +369,13 @@
     const cont = document.getElementById('historyList');
     cont.innerHTML = '';
 
-    const keys = Object.keys(state.assignmentsByDate);
-    keys.sort((a, b) => (a < b ? 1 : -1)); // desc
+    const todayParts = toTimeZoneDateParts(new Date());
+    const todayKey = `${todayParts.y}-${String(todayParts.m).padStart(2, '0')}-${String(todayParts.d).padStart(2, '0')}`;
+
+    const keys = Object.keys(state.assignmentsByDate)
+      .filter((key) => key <= todayKey)
+      .sort((a, b) => (a < b ? 1 : -1)); // desc
+
     const latest = keys.slice(0, 6);
 
     if (latest.length === 0) {
@@ -432,7 +485,7 @@
     const btnReset = document.getElementById('btnReset');
     btnReset.addEventListener('click', () => {
       if (!confirm('Confirmar reset? Isso apagará lista e histórico no navegador.')) return;
-      state = { people: DEFAULT_PEOPLE.slice(), assignmentsByDate: {}, imagesByTypeAndDate: {}, updatedAt: null };
+      state = { people: DEFAULT_PEOPLE.slice(), assignmentsByDate: {}, imagesByTypeAndDate: {}, updatedAt: null, lastMondayRefresh: null };
       saveState();
       ensureMonthlyAssignmentsUpTo(new Date());
       renderPeople();
@@ -456,12 +509,7 @@
     renderPeople();
     renderCalendar();
     renderHistory();
-
-    const tzParts = toTimeZoneDateParts(new Date());
-    const d = new Date(tzParts.y, tzParts.m - 1, tzParts.d);
-    const dayName = new Intl.DateTimeFormat('pt-BR', { timeZone: TIMEZONE, weekday: 'long' }).format(d);
-
-    statusText.textContent = `Hoje: ${dayName}`;
+    renderStatusText();
   }
 
   init();
