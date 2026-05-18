@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Calendário de Refrigerantes • Equipe</title>
+  <meta name="description" content="Calendário inteligente de responsabilidades (refrigerantes) com atualização automática às segundas-feiras (Brasília)." />
+
+  <link rel="stylesheet" href="styles.css" />
+  <meta name="theme-color" content="#0B5ED7" />
+</head>
+<body>
+  <!-- Header azul com menu hamburguer -->
+  <header class="app-header">
+<div class="header-inner">
+  <div class="brand">
+    <img class="brand-logo" src="..." alt="J. Macêdo" />
+    <div>
+      <div class="brand-title" id="desktopTitle">Calendário Inteligente</div>
+      <div class="brand-subtitle" id="desktopSubtitle">Refrigerantes da equipe • Horário: América/São_Paulo</div>
+    </div>
+  </div>
+
+  <!-- botão hamburguer vem depois da logo -->
+  <button class="burger" id="burgerBtn" aria-label="Abrir menu" aria-controls="sidePanel" aria-expanded="false">
+    <span></span><span></span><span></span>
+  </button>
+
+  <div class="header-right">
+    <div class="status-pill">Atualizando: <span id="statusText">—</span></div>
+  </div>
+</div>
+
+
+    </div>
+  </header>
+
+
+  <!-- Menu hamburguer simples (sem vários painéis) -->
+  <aside class="side-panel" id="sidePanel" aria-hidden="true">
+    <div class="side-panel-inner">
+      <div class="side-title">J. Macêdo • Refri</div>
+
+      <nav class="side-nav">
+        <a class="side-link" href="#upcoming" data-close-menu>Calendário</a>
+        <a class="side-link" href="#history" data-close-menu>Histórico</a>
+      </nav>
+
+      <div class="side-divider"></div>
+
+      <div class="side-block">
+        <div class="side-label">Pessoas</div>
+        <div class="side-help">Lista configurada no código (script.js). Para alterar, edite a variável DEFAULT_PEOPLE.</div>
+      </div>
+
+      <div class="inline" style="margin-top:12px;">
+        <button class="btn" id="btnRegenerate">Recalcular mês</button>
+        <button class="btn danger" id="btnReset">Reset</button>
+      </div>
+
+
+      <div class="side-note">Salvo no navegador (localStorage).</div>
+    </div>
+  </aside>
+
+
+  <main class="container">
+<div class="layout">
+      <section class="card">
+        <div class="section-title">
+          <h2>Próximos sábados</h2>
+          <div class="hint">Mostra próximos 8 sábados com responsáveis e litros.</div>
+    </div>
+
+        <div class="calendar" id="upcoming"></div>
+
+        <div class="footer-note">
+          <b>Regra:</b> todo sábado 2 pessoas trazem <b>Coca-Cola 2L</b> (2x2L) e 1 pessoa traz <b>São Geraldo 2L</b> (1x2L). Total: <b>6L</b> por sábado.
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-title" id="history">
+          <h2>Histórico</h2>
+          <div class="hint">Últimos 6 sábados atribuídos.</div>
+        </div>
+
+        <div class="people-list" id="peopleList" aria-label="Lista de pessoas"></div>
+
+        <div class="log" id="historyList" style="margin-top:14px;"></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Espaços para imagem (sem botão):
+       use os upload no próprio navegador no arquivo script.js se desejar.
+       aqui mantemos apenas o local da foto no código. -->
+
+  <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true">
+    <div class="toast-title" id="toastTitle">Atualizado</div>
+    <div class="toast-msg" id="toastMsg">—</div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
+
+
