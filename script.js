@@ -11,15 +11,16 @@
     'Cleilton',
     'José',
     'Pakuara',
-    'Pedro',
     'Welton',
     'Wesley',
     'Denilson',
     'Diomede',
     'Edmilson',
-    'Leonardo',
+    'Pedro',
     'Marcelo Jardeson',
-    'Marcelo Mendonça'
+    'Marcelo Mendonça',
+    'Negão',
+    'Nãnã'
   ];
 
   const TYPES = {
@@ -110,34 +111,54 @@
     return a;
   }
 
-  function monthCapacity(peopleCount) {
-    // cada sábado usa 3 pessoas distintas => quantidade máxima de sábados no mês
-    return Math.floor(peopleCount / 3);
-  }
-
   function buildAssignmentsForMonth(monthKey, people) {
     const saturdays = getAllSaturdaysInMonth(monthKey);
-    const needed = saturdays.length * 3;
+    const neededPeoplePerMonth = saturdays.length * 3;
+
+    // Regra solicitada: "no mesmo mês" ninguém pode aparecer 2x (somando Coca + Geraldo).
+    // Logo, só podemos atribuir sem repetição se people.length >= neededPeoplePerMonth.
+    // Quando não der, mantemos o melhor possível (sem repetir enquanto houver gente).
+
     const seed = hashString('refri|' + monthKey);
     const shuffled = seededShuffle(people, seed);
 
-    if (people.length < needed) {
-      console.warn(`Mês ${monthKey} precisa de ${needed} nomes. Há apenas ${people.length}.`);
+      if (people.length < neededPeoplePerMonth) {
+      console.warn(
+        `Mês ${monthKey} precisa de ${neededPeoplePerMonth} nomes (3 por sábado). Há apenas ${people.length}.`
+      );
     }
 
-    const selected = shuffled.slice(0, needed);
+    // Importante: se faltar gente, ainda assim devemos retornar atribuições com tamanho correto.
+    // Sem isso, a UI pode acabar exibindo apenas '—'.
+    const selected = shuffled.slice(0, Math.min(neededPeoplePerMonth, people.length));
     const assignments = [];
 
     for (let i = 0; i < saturdays.length; i++) {
       const sat = saturdays[i];
-      const p1 = selected[i * 3] || '—';
-      const p2 = selected[i * 3 + 1] || '—';
-      const p3 = selected[i * 3 + 2] || '—';
+
+      // Padrão de alternância para não fixar sempre as mesmas pessoas em Coca/Geraldo.
+      // Ainda assim, sem repetir no mês (porque cada pessoa vem de selected e selected não repete).
+      const base = i * 3;
+      const a = selected[base] ?? '—';
+      const b = selected[base + 1] ?? '—';
+      const c = selected[base + 2] ?? '—';
+
+      let cocaA, cocaB, geraldo;
+      if (i % 2 === 0) {
+        cocaA = a;
+        cocaB = b;
+        geraldo = c;
+      } else {
+        // troca para variar (sem alterar o fato de 3 pessoas distintas por sábado)
+        cocaA = a;
+        cocaB = c;
+        geraldo = b;
+      }
 
       assignments.push({
         dateYMD: ymd(sat),
-        coca: [p1, p2],
-        geraldo: p3
+        coca: [cocaA, cocaB],
+        geraldo
       });
     }
 
@@ -168,7 +189,8 @@
     }
 
     try {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      return parsed;
     } catch {
       return {
         people: DEFAULT_PEOPLE.slice(),
@@ -185,8 +207,11 @@
   }
 
   function normalizeState(raw) {
+    const normalizedPeople = Array.isArray(raw.people) ? raw.people : DEFAULT_PEOPLE.slice();
+
     return {
-      people: Array.isArray(raw.people) ? raw.people : DEFAULT_PEOPLE.slice(),
+      // Se o localStorage vier vazio, restaura DEFAULT_PEOPLE.
+      people: normalizedPeople.length > 0 ? normalizedPeople : DEFAULT_PEOPLE.slice(),
       assignmentsByDate: raw.assignmentsByDate && typeof raw.assignmentsByDate === 'object' ? raw.assignmentsByDate : {},
       imagesByTypeAndDate: raw.imagesByTypeAndDate && typeof raw.imagesByTypeAndDate === 'object' ? raw.imagesByTypeAndDate : {},
       updatedAt: raw.updatedAt || null,
@@ -195,6 +220,10 @@
   }
 
   let state = normalizeState(loadState());
+
+  // Nomes NÃO devem persistir no localStorage.
+  // Mantém apenas assignments/estado no storage; a lista de pessoas sempre vem do DEFAULT_PEOPLE.
+  state.people = DEFAULT_PEOPLE.slice();
 
   function computeCurrentMonthKey() {
     const p = toTimeZoneDateParts(new Date());
@@ -231,6 +260,7 @@
         if (!state.assignmentsByDate[a.dateYMD]) {
           changed = true;
         }
+        // Sempre sobrescreve o mês para refletir a lógica atual (e evitar que versões antigas fiquem “presas”).
         state.assignmentsByDate[a.dateYMD] = a;
       }
     }
@@ -295,17 +325,7 @@
           <div class="name">${escapeHtml(name)}</div>
           <div class="meta" style="font-size:12.5px;color:var(--muted);font-weight:800;">Pessoa ${i + 1}</div>
         </div>
-        <button aria-label="Remover ${escapeHtml(name)}" data-idx="${i}">×</button>
       `;
-
-      chip.querySelector('button').addEventListener('click', () => {
-        state.people.splice(i, 1);
-        saveState();
-        renderPeople();
-        renderCalendar();
-        renderHistory();
-        showToast('Atualizado', 'Pessoa removida. O histórico já atribuído permanece.');
-      });
 
       wrap.appendChild(chip);
     });
@@ -317,6 +337,17 @@
 
     const sats = nextSaturdayDates(8, new Date());
 
+    // Destaque: Sábado da semana corrente (o “daquela semana”)
+    // => fica com mais relevo do que os próximos sábados.
+    const todayParts = toTimeZoneDateParts(new Date());
+    const todayDow = new Date(todayParts.y, todayParts.m - 1, todayParts.d).getDay(); // 0..6 (Sun..Sat)
+    const daysUntilThisSaturday = (6 - todayDow + 7) % 7; // 0 se hoje é sábado
+    const thisSaturday = new Date(
+      todayParts.y,
+      todayParts.m - 1,
+      todayParts.d + daysUntilThisSaturday
+    );
+
     for (const sat of sats) {
       const a = getAssignmentsForDate(sat);
       const assigned = !!a;
@@ -325,9 +356,15 @@
 
       const el = document.createElement('div');
       el.className = 'sat';
+
+      // Se sat for o sábado desta semana corrente, aumenta relevo.
+      if (ymd(sat) === ymd(thisSaturday)) {
+        el.classList.add('sat-active');
+      }
+
       el.innerHTML = `
         <div class="date">
-          <div class="dow">Sábado</div>
+          <div class="dow ${ymd(sat) === ymd(thisSaturday) ? 'this-saturday' : ''}">${ymd(sat) === ymd(thisSaturday) ? 'Este Sábado' : 'Sábado'}</div>
           <div class="dt">${escapeHtml(fmtDatePtBR(sat))}</div>
           <div class="lit">Total: <b>6L</b> • 2x Coca-Cola 2L + 1x São Geraldo 2L</div>
         </div>
@@ -376,7 +413,8 @@
       .filter((key) => key <= todayKey)
       .sort((a, b) => (a < b ? 1 : -1)); // desc
 
-    const latest = keys.slice(0, 6);
+    // Limite do histórico: exibir apenas os últimos 4 sábados passados.
+    const latest = keys.slice(0, 4);
 
     if (latest.length === 0) {
       cont.innerHTML = `
@@ -401,9 +439,9 @@
       item.innerHTML = `
         <div class="left">
           <div class="t">${escapeHtml(dtText)}</div>
-          <div class="b">Coca-Cola: <b>${escapeHtml(a.coca.join(', '))}</b> • São Geraldo: <b>${escapeHtml(a.geraldo)}</b></div>
+          <div class="b">6L • 3 responsáveis</div>
         </div>
-        <div class="hint" style="text-align:right;font-weight:1000;">6L</div>
+        <div class="hint" style="text-align:right;font-weight:1000;">Histórico</div>
       `;
       cont.appendChild(item);
     }
